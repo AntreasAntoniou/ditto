@@ -1,0 +1,108 @@
+import AppKit
+import UniformTypeIdentifiers
+
+/// Polls `NSPasteboard.general` and turns new contents into `ClipItem`s.
+@MainActor
+final class ClipboardMonitor {
+    private let store: ClipStore
+    private var timer: Timer?
+    private var lastChangeCount: Int
+    /// When we write to the pasteboard ourselves (on paste) we bump this so the
+    /// next poll doesn't re-capture our own write.
+    private var ignoreChangeCount: Int = -1
+
+    init(store: ClipStore) {
+        self.store = store
+        self.lastChangeCount = NSPasteboard.general.changeCount
+    }
+
+    func start() {
+        timer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in self?.poll() }
+        }
+        timer?.tolerance = 0.1
+    }
+
+    func stop() { timer?.invalidate(); timer = nil }
+
+    /// Tell the monitor to skip the change we are about to cause ourselves.
+    func suppressNextChange() {
+        ignoreChangeCount = NSPasteboard.general.changeCount + 1
+    }
+
+    private func poll() {
+        let pb = NSPasteboard.general
+        let count = pb.changeCount
+        guard count != lastChangeCount else { return }
+        lastChangeCount = count
+
+        if count == ignoreChangeCount { return }
+
+        // Respect apps that mark content as transient/concealed (e.g. password managers).
+        if let types = pb.types {
+            if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.TransientType")) { return }
+            if types.contains(NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")) { return }
+        }
+
+        guard let item = capture(from: pb) else { return }
+        item.sourceApp = NSWorkspace.shared.frontmostApplication?.localizedName
+        store.add(item)
+    }
+
+    private func capture(from pb: NSPasteboard) -> ClipItem? {
+        // 1. Files take priority — drag/copy of Finder items.
+        if let urls = pb.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL],
+           let url = urls.first, url.isFileURL {
+            let item = ClipItem(kind: .file, text: url.path)
+            item.filePath = url.path
+            return item
+        }
+
+        // 2. Images.
+        if let image = NSImage(pasteboard: pb), pb.canReadObject(forClasses: [NSImage.self], options: nil) {
+            let item = ClipItem(kind: .image, text: "Image \(Int(image.size.width))×\(Int(image.size.height))")
+            if let file = persistImage(image, id: item.id) {
+                item.payloadFile = file
+            }
+            return item
+        }
+
+        // 3. Text (and styled text).
+        if let string = pb.string(forType: .string), !string.isEmpty {
+            let kind: ClipKind = Self.detectKind(for: string)
+            let item = ClipItem(kind: kind, text: string)
+            if kind == .color { item.colorHex = string.trimmingCharacters(in: .whitespaces) }
+            if let rtf = pb.data(forType: .rtf) { item.rtf = rtf }
+            return item
+        }
+
+        return nil
+    }
+
+    private func persistImage(_ image: NSImage, id: UUID) -> String? {
+        guard let tiff = image.tiffRepresentation,
+              let rep = NSBitmapImageRep(data: tiff),
+              let png = rep.representation(using: .png, properties: [:]) else { return nil }
+        let name = "\(id.uuidString).png"
+        let url = store.storeDirectory.appendingPathComponent(name)
+        do { try png.write(to: url); return name } catch { return nil }
+    }
+
+    static func detectKind(for string: String) -> ClipKind {
+        let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isColor(trimmed) { return .color }
+        if isLink(trimmed) { return .link }
+        return .text
+    }
+
+    private static func isColor(_ s: String) -> Bool {
+        let hex = "^#?([0-9A-Fa-f]{6}|[0-9A-Fa-f]{8}|[0-9A-Fa-f]{3})$"
+        return s.range(of: hex, options: .regularExpression) != nil
+    }
+
+    private static func isLink(_ s: String) -> Bool {
+        guard !s.contains(" "), s.count < 2048 else { return false }
+        guard let url = URL(string: s), let scheme = url.scheme?.lowercased() else { return false }
+        return ["http", "https", "ftp", "mailto"].contains(scheme) && url.host != nil || scheme == "mailto"
+    }
+}
