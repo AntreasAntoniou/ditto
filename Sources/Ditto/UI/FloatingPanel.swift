@@ -9,6 +9,16 @@ final class FloatingPanel: NSPanel {
 
     var onResignKey: (() -> Void)?
 
+    /// Stored hosting controller so the SwiftUI tree can be re-evaluated on every
+    /// present. Kept as the panel's `contentViewController` — see `setContent`
+    /// and `refresh`. The bug this fixes: previously the hosting view was a local
+    /// in `setContent`, assigned once at launch, so an ordered-out panel never
+    /// re-rendered `ContentView` against fresh `ClipStore` state on reopen.
+    private var hostingController: NSViewController?
+    /// Builds the current root view; reset by `setContent` on each present so the
+    /// captured `model`/`store` references stay valid.
+    private var makeRootView: (() -> NSViewController)?
+
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 800, height: FloatingPanel.barHeight),
@@ -32,10 +42,26 @@ final class FloatingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
 
-    func setContent<Content: View>(_ view: Content) {
-        let hosting = NSHostingView(rootView: view)
-        hosting.autoresizingMask = [.width, .height]
-        contentView = hosting
+    /// Install the SwiftUI content. The closure is retained and re-invoked by
+    /// `refresh()` so each present rebuilds a fresh `NSHostingController` —
+    /// guaranteeing the tree is re-evaluated against current `ClipStore` state.
+    func setContent<Content: View>(_ build: @escaping () -> Content) {
+        makeRootView = { NSHostingController(rootView: build()) }
+        refresh()
+    }
+
+    /// Re-evaluate the SwiftUI content from scratch. Called on every present so
+    /// the freshly-summoned bar reflects the latest store contents even though
+    /// the panel spent its life `orderOut`. Rebuilds the hosting controller,
+    /// installs it as `contentViewController`, and forces a synchronous layout.
+    func refresh() {
+        guard let make = makeRootView else { return }
+        let controller = make()
+        controller.view.autoresizingMask = [.width, .height]
+        hostingController = controller
+        contentViewController = controller
+        controller.view.needsLayout = true
+        controller.view.layoutSubtreeIfNeeded()
     }
 
     /// Slide the bar up from below the screen edge.

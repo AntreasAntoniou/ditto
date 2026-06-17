@@ -34,6 +34,7 @@ final class ClipStore: ObservableObject {
         if let existing = items.first(where: { $0.signature == item.signature }) {
             existing.lastUsedAt = Date()
             move(existing, toFront: true)
+            save()
             return
         }
         items.insert(item, at: 0)
@@ -102,9 +103,9 @@ final class ClipStore: ObservableObject {
     // MARK: Helpers
 
     private func move(_ item: ClipItem, toFront: Bool) {
-        guard let idx = items.firstIndex(where: { $0.id == item.id }) else { return }
-        items.remove(at: idx)
-        items.insert(item, at: 0)
+        guard items.contains(where: { $0.id == item.id }) else { return }
+        // sortStable() fully determines order (pinned-first, then recency), so an
+        // explicit front-insert is unnecessary; just re-sort in place.
         sortStable()
     }
 

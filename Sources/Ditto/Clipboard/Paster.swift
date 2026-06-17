@@ -6,7 +6,12 @@ import Carbon.HIToolbox
 @MainActor
 enum Paster {
     /// Place the clip on the general pasteboard.
-    static func writeToPasteboard(_ item: ClipItem, store: ClipStore) {
+    ///
+    /// - Parameter plain: when `true`, omit the RTF representation for text
+    ///   clips so only the plain string is written ("paste as plain text").
+    ///   Image and file clips are unaffected. Defaults to `false`, preserving
+    ///   the rich-text behavior.
+    static func writeToPasteboard(_ item: ClipItem, store: ClipStore, plain: Bool = false) {
         let pb = NSPasteboard.general
         pb.clearContents()
 
@@ -21,7 +26,7 @@ enum Paster {
                 pb.writeObjects([URL(fileURLWithPath: path) as NSURL])
             }
         default:
-            if let rtf = item.rtf {
+            if !plain, let rtf = item.rtf {
                 pb.setData(rtf, forType: .rtf)
             }
             pb.setString(item.text, forType: .string)

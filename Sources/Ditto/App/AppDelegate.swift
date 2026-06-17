@@ -109,13 +109,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: Panel
 
     private func setupPanel() {
-        model.onPaste = { [weak self] item in self?.commit(item) }
+        model.onPaste = { [weak self] item, plain in self?.commit(item, plain: plain) }
         model.onClose = { [weak self] in self?.hide(paste: false) }
         panel.onResignKey = { [weak self] in
             guard let self, self.isVisible, !self.isClosing else { return }
             self.hide(paste: false)
         }
-        panel.setContent(ContentView(model: model, store: store))
+        panel.setContent { [model, store] in ContentView(model: model, store: store) }
 
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.panel.isKeyWindow else { return event }
@@ -129,6 +129,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func show() {
         guard !isVisible else { return }
+        // Re-evaluate the SwiftUI tree against the *current* ClipStore state on
+        // every present. The panel spends almost all its life `orderOut`, where
+        // an NSHostingView's observation can be coalesced/dropped; rebuilding the
+        // hosting controller here guarantees the freshly-summoned bar shows the
+        // newest clips without needing an app restart.
+        panel.refresh()
         previousApp = NSWorkspace.shared.frontmostApplication
         model.query = ""
         model.activeKind = nil
@@ -156,10 +162,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func commit(_ item: ClipItem) {
+    /// - Parameter plain: when `true` (Option held at commit), write the clip
+    ///   as plain text only — strip the RTF representation before pasting.
+    private func commit(_ item: ClipItem, plain: Bool = false) {
         store.markUsed(item)
         monitor.suppressNextChange()
-        Paster.writeToPasteboard(item, store: store)
+        Paster.writeToPasteboard(item, store: store, plain: plain)
         // The clip is now on the system pasteboard regardless. Only the ⌘V
         // keystroke needs Accessibility — prompt once if it's missing.
         let canPaste = AXIsProcessTrusted()
@@ -174,6 +182,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func handleKey(_ event: NSEvent) -> NSEvent? {
         let cmd = event.modifierFlags.contains(.command)
+        // Holding Option at commit time requests "paste as plain text" — the
+        // clip is written without its RTF representation (⌥↩ or ⌥+⌘1–9).
+        let plain = event.modifierFlags.contains(.option)
         switch Int(event.keyCode) {
         case kVK_Escape:
             hide(paste: false); return nil
@@ -184,14 +195,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         case kVK_DownArrow, kVK_UpArrow:
             return nil
         case kVK_Return, kVK_ANSI_KeypadEnter:
-            model.commitSelection(); return nil
+            model.commitSelection(plain: plain); return nil
         case kVK_Delete where cmd:
             model.deleteSelection(); return nil
         case kVK_ANSI_P where cmd:
             model.pinSelection(); return nil
         default:
             if cmd, let digit = digit(for: Int(event.keyCode)) {
-                model.quickSelect(digit); return nil
+                model.quickSelect(digit, plain: plain); return nil
             }
             return event
         }

@@ -105,7 +105,7 @@ struct ContentView: View {
                                 index: idx,
                                 selected: idx == model.selection,
                                 storeDir: store.storeDirectory,
-                                onActivate: { model.onPaste?(item) },
+                                onActivate: { model.onPaste?(item, false) },
                                 onPin: { store.togglePin(item) },
                                 onDelete: { store.delete(item) }
                             )

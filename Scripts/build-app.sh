@@ -27,8 +27,19 @@ if command -v iconutil >/dev/null 2>&1; then
     fi
 fi
 
-# Ad-hoc sign so Accessibility / global hotkey permissions stick to a stable identity.
-echo "▸ Signing (ad-hoc)…"
-codesign --force --deep --sign - "$APP" 2>/dev/null || echo "  (codesign skipped)"
+# Code-sign the bundle. Prefer the stable, self-signed "Ditto Local Signing"
+# identity (created by Scripts/setup-signing.sh) so the macOS Accessibility grant
+# survives rebuilds — macOS keys the AX grant to code identity, and a stable
+# identity keeps it constant. If that identity is not present, fall back to ad-hoc
+# (`-`), which mints a fresh identity each build and thus drops the AX grant on
+# every rebuild (see SPEC Tier 6.6). Run Scripts/setup-signing.sh once to fix that.
+SIGN_ID="Ditto Local Signing"
+if security find-identity -v -p codesigning 2>/dev/null | grep -qF "$SIGN_ID"; then
+    echo "▸ Signing (stable: $SIGN_ID)…"
+    codesign --force --deep --sign "$SIGN_ID" "$APP" 2>/dev/null || echo "  (codesign skipped)"
+else
+    echo "▸ Signing (ad-hoc — run Scripts/setup-signing.sh for a stable identity)…"
+    codesign --force --deep --sign - "$APP" 2>/dev/null || echo "  (codesign skipped)"
+fi
 
 echo "✓ Built $APP"

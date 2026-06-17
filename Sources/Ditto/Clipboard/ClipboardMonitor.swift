@@ -134,6 +134,6 @@ final class ClipboardMonitor {
     private static func isLink(_ s: String) -> Bool {
         guard !s.contains(" "), s.count < 2048 else { return false }
         guard let url = URL(string: s), let scheme = url.scheme?.lowercased() else { return false }
-        return ["http", "https", "ftp", "mailto"].contains(scheme) && url.host != nil || scheme == "mailto"
+        return (["http", "https", "ftp"].contains(scheme) && url.host != nil) || scheme == "mailto"
     }
 }

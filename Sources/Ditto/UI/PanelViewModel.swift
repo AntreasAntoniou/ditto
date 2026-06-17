@@ -14,13 +14,25 @@ final class PanelViewModel: ObservableObject {
 
     let store: ClipStore
 
-    /// Invoked when the user commits a clip (Enter / double click).
-    var onPaste: ((ClipItem) -> Void)?
+    /// Forwards `store.objectWillChange` so that `results` (a plain computed
+    /// property reading `store`) participates in SwiftUI's update cycle. Without
+    /// this, `ContentView` observed two objects and the live data path (`store`)
+    /// could update without driving a `body` re-evaluation through `model`.
+    private var storeObserver: AnyCancellable?
+
+    /// Invoked when the user commits a clip (Enter / double click). The `plain`
+    /// flag requests "paste as plain text" (Option held at commit time).
+    var onPaste: ((ClipItem, _ plain: Bool) -> Void)?
     /// Invoked when the user dismisses the bar (Esc).
     var onClose: (() -> Void)?
 
     init(store: ClipStore) {
         self.store = store
+        // Republish store changes so the two-object observation collapses into
+        // one deterministic update path — fixes the live-while-open refresh case.
+        storeObserver = store.objectWillChange.sink { [weak self] _ in
+            self?.objectWillChange.send()
+        }
     }
 
     var results: [ClipItem] {
@@ -37,10 +49,10 @@ final class PanelViewModel: ObservableObject {
         selection = (selection + delta + count) % count
     }
 
-    func commitSelection() {
+    func commitSelection(plain: Bool = false) {
         let r = results
         guard r.indices.contains(selection) else { return }
-        onPaste?(r[selection])
+        onPaste?(r[selection], plain)
     }
 
     func deleteSelection() {
@@ -57,9 +69,9 @@ final class PanelViewModel: ObservableObject {
     }
 
     /// Number 1…9 quick-select.
-    func quickSelect(_ n: Int) {
+    func quickSelect(_ n: Int, plain: Bool = false) {
         let r = results
         guard r.indices.contains(n - 1) else { return }
-        onPaste?(r[n - 1])
+        onPaste?(r[n - 1], plain)
     }
 }
