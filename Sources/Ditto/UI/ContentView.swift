@@ -110,16 +110,18 @@ struct ContentView: View {
                                 onDelete: { store.delete(item) }
                             )
                             .id(idx)
-                            .onTapGesture { model.selection = idx }
+                            .onTapGesture { model.click(idx) }
                         }
                     }
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
             }
-            .onChange(of: model.selection) { sel in
-                withAnimation(.easeOut(duration: 0.2)) {
-                    proxy.scrollTo(sel, anchor: .center)
+            // Only keyboard navigation scrolls the strip; mouse clicks don't, so a
+            // click registers and highlights instantly with no animated re-center.
+            .onChange(of: model.scrollRequest) { target in
+                withAnimation(.easeOut(duration: 0.18)) {
+                    proxy.scrollTo(target, anchor: .center)
                 }
             }
             // When a brand-new clip arrives (it lands at index 0) snap the strip

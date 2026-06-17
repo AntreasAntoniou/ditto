@@ -11,6 +11,10 @@ final class PanelViewModel: ObservableObject {
     @Published var selection: Int = 0
     /// Bumped each time the bar is presented so the UI can reset scroll/state.
     @Published var presentToken: Int = 0
+    /// Set by keyboard navigation to request the strip scroll a card into view.
+    /// Mouse clicks deliberately do NOT set this — a clicked card is already
+    /// under the cursor, so re-centering it would feel like lag.
+    @Published var scrollRequest: Int = 0
 
     let store: ClipStore
 
@@ -47,6 +51,18 @@ final class PanelViewModel: ObservableObject {
         let count = results.count
         guard count > 0 else { selection = 0; return }
         selection = (selection + delta + count) % count
+        scrollRequest = selection
+    }
+
+    /// Select a card via mouse click — instant, no scroll animation. Clicking the
+    /// already-selected card commits it (paste).
+    func click(_ index: Int) {
+        if selection == index {
+            let r = results
+            if r.indices.contains(index) { onPaste?(r[index], false) }
+        } else {
+            selection = index
+        }
     }
 
     func commitSelection(plain: Bool = false) {

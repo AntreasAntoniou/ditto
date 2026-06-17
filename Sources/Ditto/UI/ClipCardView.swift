@@ -32,7 +32,6 @@ struct ClipCardView: View {
         .scaleEffect(selected ? 1.0 : 0.97)
         .animation(.spring(response: 0.25, dampingFraction: 0.8), value: selected)
         .onHover { hovering = $0 }
-        .onTapGesture(count: 2) { onActivate() }
         .contextMenu {
             Button("Paste") { onActivate() }
             Button(item.pinned ? "Unpin" : "Pin") { onPin() }
