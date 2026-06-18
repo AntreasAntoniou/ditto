@@ -1,7 +1,9 @@
 import AppKit
 import Combine
 
-/// Owns the clipboard history: persistence, dedup, pinning, search and limits.
+/// Owns the clipboard history. Durable storage is a SQLite database with
+/// incremental row writes (no whole-file rewrites); `items` is the in-memory
+/// projection that drives the reactive UI and in-memory search.
 @MainActor
 final class ClipStore: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
@@ -32,7 +34,7 @@ final class ClipStore: ObservableObject {
     }
 
     private let dir: URL
-    private let indexURL: URL
+    private let db: Database?
 
     /// - Parameter directory: storage location. Defaults to
     ///   `~/Library/Application Support/Ditto`; tests inject a temp directory.
@@ -41,9 +43,12 @@ final class ClipStore: ObservableObject {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("Ditto", isDirectory: true)
         dir = base
-        indexURL = dir.appendingPathComponent("history.json")
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        load()
+        db = Database(path: dir.appendingPathComponent("ditto.sqlite").path)
+        migrateLegacyJSONIfNeeded()
+        items = db?.loadAll() ?? []
+        sortStable()
+        rebuildTagIndex()
     }
 
     /// Directory where binary payloads (images) live.
@@ -57,7 +62,7 @@ final class ClipStore: ObservableObject {
             existing.lastUsedAt = Date()
             move(existing, toFront: true)
             lastAddedID = existing.id
-            save()
+            db?.updateMeta(existing)
             return
         }
         // Embed + tag at ingest (for the active model) so semantic search is
@@ -68,13 +73,11 @@ final class ClipStore: ObservableObject {
         }
         items.insert(item, at: 0)
         trim()
-        // Keep the pinned-first / recency order consistent with every other path
-        // (togglePin, load, move) so a fresh copy doesn't briefly jump ahead of
-        // pinned items only to be reordered on the next mutation.
+        // Keep the pinned-first / recency order consistent with every other path.
         sortStable()
         rebuildTagIndex()
         lastAddedID = item.id
-        save()
+        db?.insert(item)
         Feedback.playCapture()
     }
 
@@ -102,6 +105,7 @@ final class ClipStore: ObservableObject {
     /// Runs in the background, yields between items so the UI stays responsive,
     /// and is resumable — an interrupted pass leaves the rest for next time.
     func reindexStale() {
+        let sig = EmbedderProvider.active.signature
         let stale = items.filter { ClipIndexer.isStale($0) }
         guard !stale.isEmpty else { return }
         let total = stale.count
@@ -111,8 +115,10 @@ final class ClipStore: ObservableObject {
             var done = 0
             for item in stale {
                 ClipIndexer.index(item)
+                if let emb = item.embeddings[sig] {
+                    db?.upsertEmbedding(clipID: item.id, model: sig, embedding: emb)
+                }
                 done += 1
-                // Publish progress + reveal new tags every few items.
                 if done % 8 == 0 || done == total {
                     let elapsed = Date().timeIntervalSince(started)
                     let eta = done > 0 ? elapsed / Double(done) * Double(total - done) : nil
@@ -122,46 +128,38 @@ final class ClipStore: ObservableObject {
                 }
             }
             rebuildTagIndex()
-            save()
             indexing = nil
-            DebugLog.write("reindexed \(done) stale items → \(EmbedderProvider.active.signature)")
+            DebugLog.write("reindexed \(done) stale items → \(sig)")
         }
     }
 
     func togglePin(_ item: ClipItem) {
         item.pinned.toggle()
-        // Keep pinned items grouped toward the front for predictability.
         sortStable()
-        save()
+        db?.updateMeta(item)
     }
 
     func delete(_ item: ClipItem) {
         items.removeAll { $0.id == item.id }
-        if let f = item.payloadFile {
-            try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
-        }
+        removePayload(item)
         rebuildTagIndex()
-        save()
+        db?.delete(id: item.id)
     }
 
     /// Clear everything that is not pinned.
     func clearUnpinned() {
         let removed = items.filter { !$0.pinned }
         items.removeAll { !$0.pinned }
-        for item in removed {
-            if let f = item.payloadFile {
-                try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
-            }
-        }
+        removed.forEach(removePayload)
         rebuildTagIndex()
-        save()
+        db?.deleteUnpinned()
     }
 
     func markUsed(_ item: ClipItem) {
         item.lastUsedAt = Date()
         item.useCount += 1
         move(item, toFront: true)
-        save()
+        db?.updateMeta(item)
     }
 
     // MARK: Querying
@@ -191,12 +189,9 @@ final class ClipStore: ObservableObject {
 
     private func move(_ item: ClipItem, toFront: Bool) {
         guard items.contains(where: { $0.id == item.id }) else { return }
-        // sortStable() fully determines order (pinned-first, then recency), so an
-        // explicit front-insert is unnecessary; just re-sort in place.
-        sortStable()
+        sortStable()   // pinned-first, then recency — fully determines order
     }
 
-    /// Pinned first (by recency), then the rest by recency.
     private func sortStable() {
         items.sort { a, b in
             if a.pinned != b.pinned { return a.pinned && !b.pinned }
@@ -204,55 +199,49 @@ final class ClipStore: ObservableObject {
         }
     }
 
+    private func removePayload(_ item: ClipItem) {
+        if let f = item.payloadFile {
+            try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
+        }
+    }
+
     private func trim() {
         guard historyLimit > 0 else { return } // 0 = unlimited
         let unpinned = items.filter { !$0.pinned }
         guard unpinned.count > historyLimit else { return }
-        let toRemove = unpinned.suffix(unpinned.count - historyLimit)
-        for item in toRemove {
-            if let f = item.payloadFile {
-                try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
-            }
-        }
+        let toRemove = Array(unpinned.suffix(unpinned.count - historyLimit))
+        toRemove.forEach(removePayload)
         let removeIDs = Set(toRemove.map { $0.id })
         items.removeAll { removeIDs.contains($0.id) }
+        db?.delete(ids: toRemove.map { $0.id })
     }
 
-    // MARK: Persistence
+    // MARK: Migration
 
-    private func save() {
-        do {
-            let data = try JSONEncoder().encode(items)
-            try data.write(to: indexURL, options: .atomic)
-        } catch {
-            NSLog("Ditto: failed to save history: \(error)")
-        }
-    }
-
-    private func load() {
-        guard let data = try? Data(contentsOf: indexURL) else { return }
+    /// One-time import of an old `history.json` into the database, then archive it.
+    private func migrateLegacyJSONIfNeeded() {
+        let jsonURL = dir.appendingPathComponent("history.json")
+        guard (db?.clipCount() ?? 0) == 0,
+              let data = try? Data(contentsOf: jsonURL) else { return }
         let decoded: [ClipItem]
-        do {
-            decoded = try JSONDecoder().decode([ClipItem].self, from: data)
-        } catch {
-            // Never silently discard the user's history: keep a copy so the next
-            // save() can't overwrite unrecovered data, and surface the error.
-            NSLog("Ditto: history decode failed: \(error) — backing up to history.corrupt.json")
+        do { decoded = try JSONDecoder().decode([ClipItem].self, from: data) }
+        catch {
+            NSLog("Ditto: legacy history decode failed: \(error) — keeping history.corrupt.json")
             try? data.write(to: dir.appendingPathComponent("history.corrupt.json"))
             return
         }
-        items = decoded
-        // Migrate legacy single-vector fields into the per-model cache.
-        for item in items {
+        for item in decoded {
+            // Fold legacy single-vector fields into the per-model cache.
             if item.embeddings.isEmpty, let v = item.vector {
                 item.embeddings[item.vectorModel ?? "hashing-256"] =
                     ModelEmbedding(vector: v, tags: item.tagIDs ?? [])
             }
             item.vector = nil; item.tagIDs = nil; item.vectorModel = nil
         }
-        // Don't embed here — the embedder isn't configured yet at store init.
-        // `refreshForActiveModel()` (after the model loads) fills any gaps.
-        sortStable()
-        rebuildTagIndex()
+        db?.transaction { decoded.forEach { db?.insert($0) } }
+        // Archive the JSON so we don't re-import (and as a safety backup).
+        try? FileManager.default.moveItem(at: jsonURL,
+            to: dir.appendingPathComponent("history.migrated.json"))
+        DebugLog.write("migrated \(decoded.count) clips from history.json → sqlite")
     }
 }

@@ -85,6 +85,16 @@ final class ClipItem: Codable, Identifiable {
         self.useCount = 0
     }
 
+    /// Full initializer used to reconstruct a clip from a database row.
+    init(id: UUID, kind: ClipKind, text: String, rtf: Data?, payloadFile: String?,
+         filePath: String?, colorHex: String?, createdAt: Date, lastUsedAt: Date,
+         pinned: Bool, sourceApp: String?, useCount: Int) {
+        self.id = id; self.kind = kind; self.text = text; self.rtf = rtf
+        self.payloadFile = payloadFile; self.filePath = filePath; self.colorHex = colorHex
+        self.createdAt = createdAt; self.lastUsedAt = lastUsedAt; self.pinned = pinned
+        self.sourceApp = sourceApp; self.useCount = useCount
+    }
+
     // MARK: Codable
 
     private enum CodingKeys: String, CodingKey {

@@ -65,7 +65,8 @@ On first launch macOS will ask for **Accessibility** access — Ditto needs it t
 | Piece | File |
 | --- | --- |
 | Pasteboard polling + type detection | `Sources/Ditto/Clipboard/ClipboardMonitor.swift` |
-| History model, dedup, persistence, trimming | `Sources/Ditto/Clipboard/ClipStore.swift` |
+| History model, dedup, in-memory index, trimming | `Sources/Ditto/Clipboard/ClipStore.swift` |
+| SQLite store (incremental rows, Float16 vector BLOBs, WAL) | `Sources/Ditto/Clipboard/Database.swift` |
 | Write-back + simulated paste | `Sources/Ditto/Clipboard/Paster.swift` |
 | Global hotkey (Carbon) | `Sources/Ditto/App/HotKey.swift` |
 | Slide-up panel | `Sources/Ditto/UI/FloatingPanel.swift` |
