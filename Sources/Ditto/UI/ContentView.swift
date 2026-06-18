@@ -6,6 +6,9 @@ struct ContentView: View {
     @ObservedObject var model: PanelViewModel
     @ObservedObject var store: ClipStore
     @StateObject private var settings: AppSettings
+    /// Drives first-responder focus into the search field on summon (BL-11/H4):
+    /// the panel is non-activating, so nothing otherwise makes the field key.
+    @FocusState private var searchFocused: Bool
 
     init(model: PanelViewModel, store: ClipStore) {
         self.model = model
@@ -33,6 +36,17 @@ struct ContentView: View {
         )
         .padding(.horizontal, 8)
         .padding(.top, 8)
+        // Focus the search field whenever the bar is summoned (and not in settings),
+        // so summon-then-type always lands. Deferred a tick so it runs after the
+        // panel becomes key.
+        .onChange(of: model.presentToken) { _ in
+            guard !model.showSettings else { return }
+            DispatchQueue.main.async { searchFocused = true }
+        }
+        .onChange(of: model.showSettings) { showing in
+            DispatchQueue.main.async { searchFocused = !showing }
+        }
+        .onAppear { DispatchQueue.main.async { searchFocused = !model.showSettings } }
     }
 
     // MARK: Toolbar
@@ -58,6 +72,7 @@ struct ContentView: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .frame(width: 180)
+                        .focused($searchFocused)
                         .accessibilityLabel("Search clipboard")
                         .onChange(of: model.query) { _ in model.resetSelection() }
                 }

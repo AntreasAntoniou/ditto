@@ -44,6 +44,9 @@ These confirmed findings were fixed immediately (low-risk, unit-tested):
 
 - **Staircase wave A (orchestra):** BL-10a (vDSP/Accelerate cosine — identical results), BL-21 (embedder signature carries a `-v1` version token so re-conversion invalidates stale vectors), BL-08 (incremental tag index + repositioning instead of full rebuild on the per-copy hot path; integrator added the togglePin reposition the adversary caught), BL-10b (memoized `results`, invalidated on any store change), BL-16 (model license attribution in About).
 
+
+- **BL-11 (focus) implemented** (ContentView @FocusState + .focused on the search field, focused on summon/settings-toggle). Standard, safe (no-op at worst). ⚠ NEEDS your interactive confirmation that summon-then-type lands — can't be verified from a static screenshot on a non-activating panel.
+
 Everything below remains open.
 
 # Prioritized Backlog
