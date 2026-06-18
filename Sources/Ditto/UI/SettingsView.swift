@@ -13,6 +13,14 @@ final class AppSettings: ObservableObject {
     @Published var debugLogging: Bool { didSet { UserDefaults.standard.set(debugLogging, forKey: "debugLog") } }
     @Published var historyLimit: Int { didSet { store.historyLimit = historyLimit } }
     @Published var launchAtLogin: Bool { didSet { LoginItem.set(launchAtLogin) } }
+    @Published var searchMode: SearchMode { didSet { DeepSearch.mode = searchMode } }
+    @Published var deepSearchLevel: DeepSearchLevel {
+        didSet {
+            DeepSearch.level = deepSearchLevel
+            // Vectors from different model tiers aren't comparable — re-embed all.
+            store.reindexAll()
+        }
+    }
 
     init(store: ClipStore) {
         self.store = store
@@ -21,6 +29,8 @@ final class AppSettings: ObservableObject {
         debugLogging = DebugLog.enabled
         historyLimit = store.historyLimit
         launchAtLogin = LoginItem.enabled
+        searchMode = DeepSearch.mode
+        deepSearchLevel = DeepSearch.level
     }
 
     func previewSound() { Feedback.play(named: soundName) }
@@ -66,6 +76,28 @@ struct SettingsView: View {
                         .buttonStyle(.plain)
                         .disabled(!settings.soundEnabled)
                     }
+                }
+
+                section("Search") {
+                    HStack {
+                        Text("Mode")
+                        Spacer()
+                        Picker("", selection: $settings.searchMode) {
+                            ForEach(SearchMode.allCases) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 150)
+                    }
+                    HStack {
+                        Text("Embedding model")
+                        Spacer()
+                        Picker("", selection: $settings.deepSearchLevel) {
+                            ForEach(DeepSearchLevel.allCases) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 180)
+                        .disabled(settings.searchMode == .exact)
+                    }
+                    Text("Exact = substring · Tag = fast preset-tag lookup · Essence = full vector similarity. Models run on-device (CoreML); falls back to a built-in embedder until bundled.")
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
 
                 section("History") {

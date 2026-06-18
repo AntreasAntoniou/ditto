@@ -53,6 +53,10 @@ final class ClipItem: Codable, Identifiable {
     /// Bundle id / name of the app the clip was copied from.
     var sourceApp: String?
     var useCount: Int
+    /// Embedding of the clip's searchable text, computed at ingest (essence search).
+    var vector: [Float]?
+    /// Top-K preset tag ids assigned at ingest (tag search). See `TagSpace`.
+    var tagIDs: [Int]?
 
     init(kind: ClipKind, text: String) {
         self.id = UUID()

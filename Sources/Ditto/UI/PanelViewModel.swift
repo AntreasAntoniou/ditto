@@ -44,7 +44,26 @@ final class PanelViewModel: ObservableObject {
     }
 
     var results: [ClipItem] {
-        store.filtered(kind: activeKind, query: query, pinnedOnly: pinnedOnly)
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Exact (or empty query) → substring filter as before.
+        if DeepSearch.mode == .exact || q.isEmpty {
+            return store.filtered(kind: activeKind, query: q, pinnedOnly: pinnedOnly)
+        }
+        // Kind/pinned scope first (no substring), then semantic search.
+        let scoped = store.filtered(kind: activeKind, query: "", pinnedOnly: pinnedOnly)
+        let embedder = EmbedderProvider.current
+        switch DeepSearch.mode {
+        case .exact:
+            return scoped
+        case .tag:
+            // O(1) tag lookup: map the query to its nearest preset tag (100
+            // comparisons), then intersect the pre-tagged entries with the scope.
+            guard let tag = TagSpace.nearestTag(toQuery: q, embedder: embedder) else { return [] }
+            let ids = Set(store.items(taggedWith: tag).map { $0.id })
+            return scoped.filter { ids.contains($0.id) }
+        case .essence:
+            return SemanticRanker.essence(query: q, items: scoped, embedder: embedder)
+        }
     }
 
     func resetSelection() { selection = 0 }

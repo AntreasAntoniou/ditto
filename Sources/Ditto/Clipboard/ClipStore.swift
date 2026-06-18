@@ -9,6 +9,10 @@ final class ClipStore: ObservableObject {
     /// reveal it wherever it lands in the (pinned-first) order.
     @Published private(set) var lastAddedID: UUID?
 
+    /// Inverted index tag-id → entries, for O(1) "tag search" retrieval without
+    /// any query-time embedding or per-item dot products.
+    private(set) var tagIndex: [Int: [ClipItem]] = [:]
+
     /// Maximum number of unpinned items kept (0 = unlimited). Pinned items are
     /// always kept regardless.
     var historyLimit: Int {
@@ -45,15 +49,37 @@ final class ClipStore: ObservableObject {
             save()
             return
         }
+        // Embed + tag at ingest so essence/tag search are ready immediately.
+        if item.vector == nil { ClipIndexer.index(item) }
         items.insert(item, at: 0)
         trim()
         // Keep the pinned-first / recency order consistent with every other path
         // (togglePin, load, move) so a fresh copy doesn't briefly jump ahead of
         // pinned items only to be reordered on the next mutation.
         sortStable()
+        rebuildTagIndex()
         lastAddedID = item.id
         save()
         Feedback.playCapture()
+    }
+
+    /// Entries pre-classified under a preset tag — O(1) lookup, no dot products.
+    func items(taggedWith tagID: Int) -> [ClipItem] { tagIndex[tagID] ?? [] }
+
+    private func rebuildTagIndex() {
+        var index: [Int: [ClipItem]] = [:]
+        for item in items {
+            for tag in item.tagIDs ?? [] { index[tag, default: []].append(item) }
+        }
+        tagIndex = index
+    }
+
+    /// Recompute vectors + tags for every entry (e.g. after the model tier
+    /// changes, since vectors from different models aren't comparable).
+    func reindexAll() {
+        for item in items { ClipIndexer.index(item) }
+        rebuildTagIndex()
+        save()
     }
 
     func togglePin(_ item: ClipItem) {
@@ -68,6 +94,7 @@ final class ClipStore: ObservableObject {
         if let f = item.payloadFile {
             try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
         }
+        rebuildTagIndex()
         save()
     }
 
@@ -80,6 +107,7 @@ final class ClipStore: ObservableObject {
                 try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
             }
         }
+        rebuildTagIndex()
         save()
     }
 
@@ -159,7 +187,10 @@ final class ClipStore: ObservableObject {
         guard let data = try? Data(contentsOf: indexURL) else { return }
         if let decoded = try? JSONDecoder().decode([ClipItem].self, from: data) {
             items = decoded
+            // Back-fill vectors/tags for entries saved before indexing existed.
+            for item in items where item.vector == nil { ClipIndexer.index(item) }
             sortStable()
+            rebuildTagIndex()
         }
     }
 }
