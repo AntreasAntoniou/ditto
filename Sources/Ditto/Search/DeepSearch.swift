@@ -76,7 +76,18 @@ enum DeepSearch {
 
 protocol TextEmbedder {
     var dimension: Int { get }
+    /// Stable identity of this embedder ("hashing-256", "ogma-small-256", …).
+    /// Stored vectors / tag vectors are only comparable within one signature.
+    var signature: String { get }
+    /// Embed a document/symmetric text.
     func embed(_ text: String) -> [Float]
+    /// Embed, distinguishing a query from a document (asymmetric models use the
+    /// QRY vs DOC task token). Defaults to the document path.
+    func embed(_ text: String, query: Bool) -> [Float]
+}
+
+extension TextEmbedder {
+    func embed(_ text: String, query: Bool) -> [Float] { embed(text) }
 }
 
 /// Real, dependency-free embedder: hashed character tri-grams + word tokens,
@@ -85,6 +96,7 @@ protocol TextEmbedder {
 /// `Hasher`, so vectors persisted on disk stay valid across launches).
 struct HashingEmbedder: TextEmbedder {
     let dimension: Int = 256
+    let signature = "hashing-256"
 
     func embed(_ text: String) -> [Float] {
         var vec = [Float](repeating: 0, count: dimension)
@@ -114,44 +126,105 @@ struct HashingEmbedder: TextEmbedder {
     }
 }
 
-/// Loads a compiled CoreML embedding model bundled in the app; `nil` when the
-/// model for a tier isn't bundled yet (callers fall back to `HashingEmbedder`).
-/// Real ogma/EmbeddingGemma wiring still needs a `<name>.mlmodelc` in Resources
-/// plus a tokenizer + mean-pooling in `embed` (SPEC Tier 7, P-deep-search).
-struct CoreMLEmbedder: TextEmbedder {
+/// On-device CoreML embedder for the ogma models. The converted model's forward
+/// already returns a pooled, L2-normalised vector; we just tokenize (Unigram via
+/// swift-transformers) and run a prediction, passing the task token separately
+/// (4=QRY, 5=DOC, 6=SYM) exactly as the model expects.
+final class OgmaEmbedder: TextEmbedder {
     let dimension: Int
+    let signature: String
+    private let model: MLModel
+    private let tokenizer: OgmaTokenizer
+    private let maxLen = 256
 
-    init?(modelName: String) {
-        // The ogma/EmbeddingGemma CoreML models are converted & bundled (parity
-        // 1.0 vs PyTorch), and the model's forward already returns a pooled,
-        // L2-normalised vector. What's left is the Swift Unigram tokenizer +
-        // `MLModel.prediction`. Until that's wired, stay DISABLED so the engine
-        // uses the HashingEmbedder fallback instead of zero vectors.
-        return nil
+    private enum Task: Int32 { case qry = 4, doc = 5, sym = 6 }
+
+    init(modelName: String, model: MLModel, tokenizer: OgmaTokenizer, dimension: Int) {
+        self.model = model
+        self.tokenizer = tokenizer
+        self.dimension = dimension
+        self.signature = "\(modelName)-\(dimension)"
     }
 
-    func embed(_ text: String) -> [Float] { [Float](repeating: 0, count: dimension) }
+    func embed(_ text: String) -> [Float] { run(text, task: .doc) }
+    func embed(_ text: String, query: Bool) -> [Float] { run(text, task: query ? .qry : .doc) }
+
+    private func run(_ text: String, task: Task) -> [Float] {
+        var ids = tokenizer.encode(text).map { Int32($0) }
+        if ids.count > maxLen { ids = Array(ids.prefix(maxLen - 1)) + [ids[ids.count - 1]] }
+        let len = ids.count
+        guard let idArr = try? MLMultiArray(shape: [1, NSNumber(value: len)], dataType: .int32),
+              let maskArr = try? MLMultiArray(shape: [1, NSNumber(value: len)], dataType: .int32),
+              let taskArr = try? MLMultiArray(shape: [1], dataType: .int32) else {
+            return [Float](repeating: 0, count: dimension)
+        }
+        for i in 0..<len { idArr[i] = NSNumber(value: ids[i]); maskArr[i] = 1 }
+        taskArr[0] = NSNumber(value: task.rawValue)
+        let out: MLFeatureProvider
+        do {
+            let input = try MLDictionaryFeatureProvider(dictionary: [
+                "input_ids": idArr, "attention_mask": maskArr, "task_token_ids": taskArr
+            ])
+            out = try model.prediction(from: input)
+        } catch {
+            NSLog("Ditto OgmaEmbedder: prediction failed (ids=\(ids.prefix(8))): \(error)")
+            return [Float](repeating: 0, count: dimension)
+        }
+        guard let emb = out.featureValue(for: "embedding")?.multiArrayValue else {
+            NSLog("Ditto OgmaEmbedder: no 'embedding' output; features=\(out.featureNames)")
+            return [Float](repeating: 0, count: dimension)
+        }
+        var v = [Float](repeating: 0, count: emb.count)
+        for i in 0..<emb.count { v[i] = emb[i].floatValue }
+        if DebugLog.enabled {
+            NSLog("Ditto OgmaEmbedder: ids=\(ids.prefix(8)) len=\(len) embCount=\(emb.count) dtype=\(emb.dataType.rawValue) v0..2=\(v.prefix(3))")
+        }
+        return v
+    }
 }
 
+/// Owns the currently-active embedder. Loads CoreML models asynchronously and
+/// swaps them in when ready; until then (and when a tier has no bundled model)
+/// the `HashingEmbedder` is used so search always works.
+@MainActor
 enum EmbedderProvider {
-    /// Cached embedder for a level (recomputed only when the level changes).
-    private static var cache: (DeepSearchLevel, TextEmbedder)?
+    private(set) static var active: TextEmbedder = HashingEmbedder()
 
-    static func embedder(for level: DeepSearchLevel) -> TextEmbedder {
-        if let (lvl, emb) = cache, lvl == level { return emb }
-        let emb: TextEmbedder = {
-            if let name = level.modelName, let core = CoreMLEmbedder(modelName: name) { return core }
-            return HashingEmbedder()
-        }()
-        cache = (level, emb)
-        return emb
+    /// Load the embedder for `level` (CoreML model + hand-rolled tokenizer, both
+    /// synchronous). Falls back to the HashingEmbedder when the tier has no model
+    /// bundled or loading fails.
+    @discardableResult
+    static func configure(level: DeepSearchLevel) -> Bool {
+        let before = active.signature
+        if let name = level.modelName,
+           let modelURL = Bundle.main.url(forResource: name, withExtension: "mlmodelc"),
+           let tokFolder = Bundle.main.url(forResource: "\(name)-tokenizer", withExtension: nil),
+           let model = try? MLModel(contentsOf: modelURL),
+           let tokenizer = OgmaTokenizer(folder: tokFolder) {
+            active = OgmaEmbedder(modelName: name, model: model, tokenizer: tokenizer,
+                                  dimension: level.dimension)
+        } else {
+            if level != .off { NSLog("Ditto: embedder unavailable for \(level.rawValue) — using fallback") }
+            active = HashingEmbedder()
+        }
+        return active.signature != before
     }
 
-    static var current: TextEmbedder { embedder(for: DeepSearch.level == .off ? .low : DeepSearch.level) }
+    /// Configure for `level` and re-embed all stored entries if the embedder
+    /// identity changed (vectors from different models aren't comparable).
+    static func configureAndReindex(level: DeepSearchLevel, store: ClipStore) {
+        configure(level: level)
+        let sig = active.signature
+        if UserDefaults.standard.string(forKey: "vectorSignature") != sig {
+            store.reindexAll()
+            UserDefaults.standard.set(sig, forKey: "vectorSignature")
+        }
+    }
 }
 
 // MARK: - Preset tag taxonomy (100 tags)
 
+@MainActor
 enum TagSpace {
     /// 100 fixed content tags. Index in this array is the stable tag id.
     static let names: [String] = [
@@ -179,13 +252,14 @@ enum TagSpace {
 
     static var count: Int { names.count }
 
-    /// Tag vectors in the active embedder's space, cached per embedder dimension.
-    private static var cache: (Int, [[Float]])?
+    /// Tag vectors in the active embedder's space, cached per embedder signature
+    /// (two models can share a dimension but live in different spaces).
+    private static var cache: (String, [[Float]])?
 
     static func vectors(using embedder: TextEmbedder) -> [[Float]] {
-        if let (dim, v) = cache, dim == embedder.dimension { return v }
+        if let (sig, v) = cache, sig == embedder.signature { return v }
         let v = names.map { embedder.embed($0) }
-        cache = (embedder.dimension, v)
+        cache = (embedder.signature, v)
         return v
     }
 
@@ -199,17 +273,18 @@ enum TagSpace {
 
     /// Nearest single tag id for a query (used by tag search).
     static func nearestTag(toQuery query: String, embedder: TextEmbedder) -> Int? {
-        classify(embedder.embed(query), embedder: embedder, topK: 1).first
+        classify(embedder.embed(query, query: true), embedder: embedder, topK: 1).first
     }
 }
 
 // MARK: - Ingest indexing
 
+@MainActor
 enum ClipIndexer {
     /// Compute and attach the entry's vector + top-5 tag ids using the active
-    /// model tier. Idempotent-ish: always recomputes from the current embedder.
+    /// embedder. Entries are documents, so use the DOC task token.
     static func index(_ item: ClipItem) {
-        let embedder = EmbedderProvider.current
+        let embedder = EmbedderProvider.active
         let vec = embedder.embed(SemanticRanker.searchText(item))
         item.vector = vec
         item.tagIDs = TagSpace.classify(vec, embedder: embedder, topK: 5)
@@ -236,7 +311,7 @@ enum SemanticRanker {
 
     /// Essence search: full query·item cosine, best-first, thresholded.
     static func essence(query: String, items: [ClipItem], embedder: TextEmbedder) -> [ClipItem] {
-        let qv = embedder.embed(query)
+        let qv = embedder.embed(query, query: true)
         let q = query.lowercased()
         let scored = items.map { item -> (ClipItem, Float) in
             let vec = item.vector ?? embedder.embed(searchText(item))

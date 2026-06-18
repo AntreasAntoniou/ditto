@@ -36,9 +36,20 @@ if ls "$ROOT"/tools/models/*.mlpackage >/dev/null 2>&1; then
         name="$(basename "$pkg" .mlpackage)"
         xcrun coremlcompiler compile "$pkg" "$APP/Contents/Resources" 2>/dev/null \
             && echo "  • $name.mlmodelc"
-        # bundle the matching tokenizer.json (named <model>-tokenizer.json)
-        tok="$ROOT/tools/models/$name/tokenizer.json"
-        [ -f "$tok" ] && cp "$tok" "$APP/Contents/Resources/$name-tokenizer.json"
+        # bundle the tokenizer as a folder <name>-tokenizer/ with the two files
+        # AutoTokenizer.from(modelFolder:) needs.
+        src="$ROOT/tools/models/$name"
+        if [ -f "$src/tokenizer.json" ]; then
+            dst="$APP/Contents/Resources/$name-tokenizer"
+            mkdir -p "$dst"
+            cp "$src/tokenizer.json" "$dst/"
+            [ -f "$src/tokenizer_config.json" ] && cp "$src/tokenizer_config.json" "$dst/"
+            # swift-transformers' AutoTokenizer.from(modelFolder:) also reads config.json
+            [ -f "$src/config.json" ] && cp "$src/config.json" "$dst/"
+            # Remap the custom tokenizer_class to T5Tokenizer — swift-transformers'
+            # Unigram implementation, which matches ogma's Unigram tokenizer.json.
+            python3 -c "import json; p='$dst/tokenizer_config.json'; d=json.load(open(p)); d['tokenizer_class']='T5Tokenizer'; json.dump(d, open(p,'w'))" 2>/dev/null || true
+        fi
     done
 fi
 

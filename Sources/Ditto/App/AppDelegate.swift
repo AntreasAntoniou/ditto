@@ -25,6 +25,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         setupPanel()
         setupHotKey()
         setupRemoteToggle()
+        // Load the on-device embedder for the saved tier; re-index if the model
+        // identity changed since last launch.
+        EmbedderProvider.configureAndReindex(level: DeepSearch.level, store: store)
         monitor.start()
         // Note: we deliberately do NOT prompt for Accessibility on launch — that
         // nags on every start (and after every reinstall, since the code identity
@@ -34,14 +37,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     /// A Darwin notification that toggles the bar — lets scripts/tests drive it
     /// without needing the global hotkey (which requires Accessibility).
     private func setupRemoteToggle() {
-        let name = "ai.axiotic.ditto.toggle" as CFString
         let center = CFNotificationCenterGetDarwinNotifyCenter()
         let ctx = Unmanaged.passUnretained(self).toOpaque()
         CFNotificationCenterAddObserver(center, ctx, { _, observer, _, _, _ in
             guard let observer else { return }
             let me = Unmanaged<AppDelegate>.fromOpaque(observer).takeUnretainedValue()
             DispatchQueue.main.async { me.toggle() }
-        }, name, nil, .deliverImmediately)
+        }, "ai.axiotic.ditto.toggle" as CFString, nil, .deliverImmediately)
+        // Embed self-test: logs the active embedder's vector for a fixed string
+        // so it can be diffed against the Python reference.
+        CFNotificationCenterAddObserver(center, ctx, { _, observer, _, _, _ in
+            guard let observer else { return }
+            let me = Unmanaged<AppDelegate>.fromOpaque(observer).takeUnretainedValue()
+            DispatchQueue.main.async { me.embedSelfTest() }
+        }, "ai.axiotic.ditto.embedtest" as CFString, nil, .deliverImmediately)
+    }
+
+    private func embedSelfTest() {
+        let e = EmbedderProvider.active
+        let v = e.embed("the quick brown fox")
+        let head = v.prefix(6).map { String(format: "%.5f", $0) }.joined(separator: ", ")
+        let norm = (v.reduce(0) { $0 + $1 * $1 }).squareRoot()
+        NSLog("EMBEDTEST sig=\(e.signature) dim=\(v.count) norm=\(String(format: "%.5f", norm)) head=[\(head)]")
     }
 
     // MARK: Status bar

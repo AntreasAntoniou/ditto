@@ -72,6 +72,37 @@ On first launch macOS will ask for **Accessibility** access — Ditto needs it t
 | Bar & card UI (SwiftUI) | `Sources/Ditto/UI/ContentView.swift`, `ClipCardView.swift` |
 | App wiring, menu, keyboard | `Sources/Ditto/App/AppDelegate.swift` |
 
+## Deep search (on-device embeddings)
+
+Beyond exact substring search, Ditto can search **semantically**, fully on-device:
+
+- **Essence search** — embeds your query and ranks the whole history by meaning
+  (full vector cosine).
+- **Tag search** — every clip is classified at ingest into its top-5 of **100
+  preset tags**; a query maps to its nearest tag (100 comparisons) then an O(1)
+  inverted-index lookup — no per-item dot products.
+
+Models run locally via **CoreML** (no network, no account):
+
+| Tier | Model | Dim |
+| --- | --- | --- |
+| Low | [`axiotic/ogma-micro`](https://huggingface.co/axiotic/ogma-micro) | 128 |
+| Normal (default) | [`axiotic/ogma-small`](https://huggingface.co/axiotic/ogma-small) | 256 |
+
+Enable it in the in-bar **Settings → Search**. Until the CoreML models are
+bundled, a built-in deterministic embedder is used as a fallback so search always
+works. Token ids and embeddings match the PyTorch reference exactly (the tokenizer
+is reimplemented in Swift — see `Sources/Ditto/Search/OgmaTokenizer.swift`).
+
+To produce/bundle the models, run the pipeline in [`tools/`](tools/README.md):
+
+```bash
+cd tools
+python3 _dl.py axiotic/ogma-small && python3 convert_ogma.py models/ogma-small
+python3 _dl.py axiotic/ogma-micro && python3 convert_ogma.py models/ogma-micro
+cd .. && make app   # build-app.sh compiles + bundles them automatically
+```
+
 ## Roadmap
 
 - iCloud / file-based sync across machines

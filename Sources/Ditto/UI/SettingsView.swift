@@ -13,12 +13,18 @@ final class AppSettings: ObservableObject {
     @Published var debugLogging: Bool { didSet { UserDefaults.standard.set(debugLogging, forKey: "debugLog") } }
     @Published var historyLimit: Int { didSet { store.historyLimit = historyLimit } }
     @Published var launchAtLogin: Bool { didSet { LoginItem.set(launchAtLogin) } }
-    @Published var searchMode: SearchMode { didSet { DeepSearch.mode = searchMode } }
+    @Published var searchMode: SearchMode {
+        didSet {
+            DeepSearch.mode = searchMode
+            // Semantic modes need a model; default to ogma-small if none chosen.
+            if searchMode != .exact && deepSearchLevel == .off { deepSearchLevel = .normal }
+        }
+    }
     @Published var deepSearchLevel: DeepSearchLevel {
         didSet {
             DeepSearch.level = deepSearchLevel
-            // Vectors from different model tiers aren't comparable — re-embed all.
-            store.reindexAll()
+            // Load the new tier's model, then re-embed all entries into its space.
+            EmbedderProvider.configureAndReindex(level: deepSearchLevel, store: store)
         }
     }
 

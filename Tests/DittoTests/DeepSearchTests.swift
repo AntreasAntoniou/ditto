@@ -33,6 +33,7 @@ final class EmbeddingTests: XCTestCase {
     }
 }
 
+@MainActor
 final class TagSpaceTests: XCTestCase {
     private let e = HashingEmbedder()
 

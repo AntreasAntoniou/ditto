@@ -51,7 +51,7 @@ final class PanelViewModel: ObservableObject {
         }
         // Kind/pinned scope first (no substring), then semantic search.
         let scoped = store.filtered(kind: activeKind, query: "", pinnedOnly: pinnedOnly)
-        let embedder = EmbedderProvider.current
+        let embedder = EmbedderProvider.active
         switch DeepSearch.mode {
         case .exact:
             return scoped
