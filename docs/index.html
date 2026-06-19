@@ -73,6 +73,20 @@
   .specs{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;color:var(--mut);font-size:13.5px}
   .specs span{border:1px solid var(--line);border-radius:999px;padding:7px 14px;background:var(--bg2)}
 
+  .cmp{width:100%;border-collapse:separate;border-spacing:0;margin-top:14px;font-size:14px;
+    border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .cmp th,.cmp td{padding:14px 16px;text-align:center;border-bottom:1px solid var(--line)}
+  .cmp tr:last-child td{border-bottom:none}
+  .cmp th{font-size:13px;color:var(--mut);font-weight:600;background:var(--bg2)}
+  .cmp td:first-child,.cmp th:first-child{text-align:left;color:var(--fg)}
+  .cmp .me{background:rgba(97,175,239,.08)}
+  .cmp th.me{color:var(--accent);font-weight:800;background:rgba(97,175,239,.12)}
+  .cmp .y{color:#52d273;font-weight:700}
+  .cmp .n{color:#5a6273}
+  .cmp .p{color:#e0a458;font-size:12.5px}
+  .cmp td small{color:var(--mut);font-size:11.5px;display:block}
+  @media(max-width:760px){.cmp{font-size:12px}.cmp th,.cmp td{padding:9px 8px}}
+
   .final{text-align:center;background:linear-gradient(180deg,transparent,rgba(97,175,239,.06));border-top:1px solid var(--line)}
   footer{border-top:1px solid var(--line);padding:30px 0;color:var(--mut);font-size:13px}
   footer .wrap{display:flex;justify-content:space-between;flex-wrap:wrap;gap:12px;align-items:center}
@@ -87,6 +101,7 @@
   <a class="brand" href="#"><span class="glyph">D</span> Ditto</a>
   <div class="navlinks">
     <a href="#features">Features</a>
+    <a href="#compare">Compare</a>
     <a href="#themes">Themes</a>
     <a href="https://github.com/AntreasAntoniou/ditto/blob/main/PRIVACY.md">Privacy</a>
     <a href="https://github.com/AntreasAntoniou/ditto">GitHub ↗</a>
@@ -118,6 +133,27 @@
     <div class="card"><div class="ic">🧱</div><h3>Three layouts</h3><p>A horizontal card strip, a dense compact list, or a Spotlight-style palette with a live preview. Your call.</p></div>
     <div class="card"><div class="ic">🖼️</div><h3>Text, links, colors, images</h3><p>Ditto recognises what you copy — rich text, URLs, hex colors, files and images — and keeps thumbnails for fast browsing.</p></div>
   </div>
+</section>
+
+<section id="compare" class="wrap">
+  <div class="eyebrow">How it compares</div>
+  <h2>Ditto vs. the field.</h2>
+  <p class="lead">There are great clipboard managers. None are free, open-source, fully on-device, <i>and</i> search by meaning.</p>
+  <table class="cmp">
+    <thead>
+      <tr><th>&nbsp;</th><th class="me">Ditto</th><th>Maccy</th><th>Paste</th><th>Raycast</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Price</td><td class="me"><b>Free</b></td><td>Free</td><td>$29.99/yr</td><td>Free tier</td></tr>
+      <tr><td>Open source</td><td class="me y">✓ MIT</td><td class="y">✓ MIT</td><td class="n">—</td><td class="n">—</td></tr>
+      <tr><td>On-device semantic search<small>find clips by meaning, not exact text</small></td><td class="me y">✓</td><td class="n">—</td><td class="p">cloud OCR</td><td class="n">—</td></tr>
+      <tr><td>Encrypted at rest</td><td class="me y">✓</td><td class="n">—</td><td class="p">in cloud</td><td class="n">—</td></tr>
+      <tr><td>Stays on your Mac<small>no cloud, no account, no telemetry</small></td><td class="me y">✓</td><td class="y">✓</td><td class="n">iCloud</td><td class="p">account</td></tr>
+      <tr><td>Themes &amp; layouts</td><td class="me y">17 + 3</td><td class="p">minimal</td><td class="p">paid</td><td class="p">launcher</td></tr>
+      <tr><td>Text, links, colors, images</td><td class="me y">✓</td><td class="y">✓</td><td class="y">✓</td><td class="p">limits</td></tr>
+    </tbody>
+  </table>
+  <p class="lead" style="margin-top:22px;font-size:13px">No cross-device sync — <a href="https://github.com/AntreasAntoniou/ditto/blob/main/PRIVACY.md" style="color:var(--accent)">on purpose</a>. Your clipboard holds passwords and tokens; it should never touch a network.</p>
 </section>
 
 <section id="themes" class="wrap">
