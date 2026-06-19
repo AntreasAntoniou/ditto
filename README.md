@@ -119,10 +119,9 @@ reimplemented in Swift). To produce/bundle the models, see [`tools/`](tools/READ
 
 ## Roadmap
 
-- **Snippets** — saved, reusable clips (signatures, boilerplate); see [SNIPPETS.md](SNIPPETS.md)
 - **Clip stack** — queue several, paste in order
-- **Keyword expansion** — type an abbreviation, expand to a snippet
-- Customizable hotkey · smart actions on links/colors
+- **On-device OCR** — search text inside image clips
+- Customizable hotkey · smart actions on links & colors
 
 ## License
 
