@@ -1,11 +1,154 @@
 import SwiftUI
 import AppKit
 
-/// Small palette + helpers shared across the bar UI.
+/// The visual tokens that define one theme preset. Most text stays semantic
+/// (`.primary`/`.secondary`) and adapts via the forced `scheme`; presets mainly
+/// vary accent, surfaces, borders, and (for flat themes) fills.
+struct ThemeTokens {
+    var accent: Color
+    var pin: Color                                   // distinct from accent (selection vs pin)
+    var cardWidth: CGFloat = 220
+    var cardHeight: CGFloat = 250
+    var cornerRadius: CGFloat = 12
+    var usesMaterials: Bool = true                   // vibrancy vs flat fills
+    var barMaterial: NSVisualEffectView.Material = .hudWindow
+    var cardMaterial: NSVisualEffectView.Material = .contentBackground
+    var barFill: Color = .clear                      // used when !usesMaterials
+    var cardFill: Color = .clear
+    var border: Color = Color.primary.opacity(0.08)
+    var borderHover: Color = Color.primary.opacity(0.18)
+    var selectedBorderWidth: CGFloat = 2.5
+    var tagFill: Color = Color.primary.opacity(0.08)
+    var tagText: Color = .secondary
+    var scheme: ColorScheme? = nil                   // force light/dark, nil = follow system
+    var fontDesign: Font.Design = .default
+}
+
+/// Selectable theme presets (the visual-QA bake-off shortlist). `system` is the
+/// default and preserves the original look so nothing changes unless chosen.
+enum ThemePreset: String, CaseIterable, Identifiable {
+    case system, swiss, glass, highContrast, paper
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system:       return "System"
+        case .swiss:        return "Swiss Grayscale"
+        case .glass:        return "Midnight Glass"
+        case .highContrast: return "High Contrast"
+        case .paper:        return "Paper & Ink"
+        }
+    }
+
+    var tokens: ThemeTokens {
+        switch self {
+        case .system:
+            return ThemeTokens(accent: .accentColor, pin: .orange)
+        case .swiss:
+            return ThemeTokens(
+                accent: Color(.sRGB, red: 0.16, green: 0.50, blue: 0.96, opacity: 1),
+                pin: Color(.sRGB, red: 0.95, green: 0.55, blue: 0.10, opacity: 1),
+                cornerRadius: 9, usesMaterials: false,
+                barFill: Color(.sRGB, white: 0.96, opacity: 1),
+                cardFill: .white,
+                border: Color(.sRGB, white: 0.82, opacity: 1),
+                borderHover: Color(.sRGB, white: 0.62, opacity: 1),
+                selectedBorderWidth: 2,
+                tagFill: Color(.sRGB, white: 0.93, opacity: 1),
+                tagText: Color(.sRGB, white: 0.42, opacity: 1),
+                scheme: .light)
+        case .glass:
+            return ThemeTokens(
+                accent: Color(.sRGB, red: 0.27, green: 0.90, blue: 0.82, opacity: 1),
+                pin: Color(.sRGB, red: 0.27, green: 0.90, blue: 0.82, opacity: 1),
+                cornerRadius: 14,
+                barMaterial: .hudWindow, cardMaterial: .contentBackground,
+                border: Color.white.opacity(0.10), borderHover: Color.white.opacity(0.22),
+                selectedBorderWidth: 2,
+                tagFill: Color.white.opacity(0.06), tagText: Color(white: 0.70),
+                scheme: .dark)
+        case .highContrast:
+            return ThemeTokens(
+                accent: Color(.sRGB, red: 0.25, green: 0.85, blue: 1.0, opacity: 1),
+                pin: Color(.sRGB, red: 1.0, green: 0.60, blue: 0.0, opacity: 1),
+                cornerRadius: 8, usesMaterials: false,
+                barFill: .black,
+                cardFill: Color(.sRGB, white: 0.07, opacity: 1),
+                border: Color.white.opacity(0.55), borderHover: Color.white.opacity(0.85),
+                selectedBorderWidth: 3.5,
+                tagFill: Color(.sRGB, white: 0.18, opacity: 1), tagText: Color(white: 0.92),
+                scheme: .dark)
+        case .paper:
+            return ThemeTokens(
+                accent: Color(.sRGB, red: 0.66, green: 0.32, blue: 0.18, opacity: 1),
+                pin: Color(.sRGB, red: 0.70, green: 0.50, blue: 0.10, opacity: 1),
+                cornerRadius: 10, usesMaterials: false,
+                barFill: Color(.sRGB, red: 0.96, green: 0.94, blue: 0.89, opacity: 1),
+                cardFill: Color(.sRGB, red: 0.99, green: 0.98, blue: 0.95, opacity: 1),
+                border: Color(.sRGB, red: 0.82, green: 0.78, blue: 0.70, opacity: 1),
+                borderHover: Color(.sRGB, red: 0.60, green: 0.55, blue: 0.45, opacity: 1),
+                selectedBorderWidth: 2,
+                tagFill: Color(.sRGB, red: 0.90, green: 0.87, blue: 0.80, opacity: 1),
+                tagText: Color(.sRGB, red: 0.45, green: 0.40, blue: 0.32, opacity: 1),
+                scheme: .light, fontDesign: .serif)
+        }
+    }
+}
+
+/// How the bar arranges its clips (the visual-QA layout shortlist).
+enum LayoutMode: String, CaseIterable, Identifiable {
+    case strip, spotlight, list
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .strip:     return "Card Strip"
+        case .spotlight: return "Spotlight Palette"
+        case .list:      return "Compact List"
+        }
+    }
+    var subtitle: String {
+        switch self {
+        case .strip:     return "Horizontal cards (classic)"
+        case .spotlight: return "Search + results + preview"
+        case .list:      return "Dense one-line rows"
+        }
+    }
+}
+
+/// Small palette + helpers shared across the bar UI. Reads the active preset.
 enum Theme {
-    static let cardWidth: CGFloat = 220
-    static let cardHeight: CGFloat = 250
-    static let accent = Color.accentColor
+    static var preset: ThemePreset {
+        get { ThemePreset(rawValue: UserDefaults.standard.string(forKey: "themePreset") ?? "system") ?? .system }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "themePreset") }
+    }
+    static var layout: LayoutMode {
+        get { LayoutMode(rawValue: UserDefaults.standard.string(forKey: "layoutMode") ?? "strip") ?? .strip }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: "layoutMode") }
+    }
+    static var t: ThemeTokens { preset.tokens }
+    static var accent: Color { t.accent }
+    static var pin: Color { t.pin }
+    static var cardWidth: CGFloat { t.cardWidth }
+    static var cardHeight: CGFloat { t.cardHeight }
+    static var cornerRadius: CGFloat { t.cornerRadius }
+
+    /// The bar's background — vibrancy material or a flat themed fill.
+    @ViewBuilder static func barBackground() -> some View {
+        if t.usesMaterials {
+            VisualEffectBackground(material: t.barMaterial, blending: .behindWindow)
+        } else {
+            t.barFill
+        }
+    }
+
+    /// A card's background — vibrancy material or a flat themed fill.
+    @ViewBuilder static func cardBackground() -> some View {
+        if t.usesMaterials {
+            VisualEffectBackground(material: t.cardMaterial, blending: .withinWindow)
+        } else {
+            t.cardFill
+        }
+    }
 
     static func color(fromHex hex: String) -> Color {
         var s = hex.trimmingCharacters(in: .whitespacesAndNewlines)

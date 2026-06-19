@@ -28,14 +28,19 @@ struct ContentView: View {
             }
             footer
         }
-        .background(VisualEffectBackground(material: .hudWindow, blending: .behindWindow))
+        .background(Theme.barBackground())
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
+                .strokeBorder(Theme.t.border, lineWidth: 1)
         )
         .padding(.horizontal, 8)
         .padding(.top, 8)
+        // Theme preset: tint drives every Theme.accent control; the forced scheme
+        // makes semantic .primary/.secondary text adapt; fontDesign gives Paper its serif.
+        .tint(Theme.accent)
+        .preferredColorScheme(Theme.t.scheme)
+        .fontDesign(Theme.t.fontDesign)
         // Focus the search field whenever the bar is summoned (and not in settings),
         // so summon-then-type always lands. Deferred a tick so it runs after the
         // panel becomes key.

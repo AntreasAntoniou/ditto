@@ -13,6 +13,8 @@ final class AppSettings: ObservableObject {
     @Published var debugLogging: Bool { didSet { UserDefaults.standard.set(debugLogging, forKey: "debugLog") } }
     @Published var historyLimit: Int { didSet { store.historyLimit = historyLimit } }
     @Published var launchAtLogin: Bool { didSet { LoginItem.set(launchAtLogin) } }
+    @Published var themePreset: ThemePreset { didSet { Theme.preset = themePreset } }
+    @Published var layoutMode: LayoutMode { didSet { Theme.layout = layoutMode } }
     @Published var searchMode: SearchMode {
         didSet {
             DeepSearch.mode = searchMode
@@ -52,6 +54,8 @@ final class AppSettings: ObservableObject {
         debugLogging = DebugLog.enabled
         historyLimit = store.historyLimit
         launchAtLogin = LoginItem.enabled
+        themePreset = Theme.preset
+        layoutMode = Theme.layout
         searchMode = DeepSearch.mode
         deepSearchLevel = DeepSearch.level
         activeBasket = TagBaskets.activeID
@@ -91,6 +95,27 @@ struct SettingsView: View {
                         Spacer()
                         keycap("⌃⌥⌘V")
                     }
+                }
+
+                section("Appearance") {
+                    HStack {
+                        Text("Theme")
+                        Spacer()
+                        Picker("", selection: $settings.themePreset) {
+                            ForEach(ThemePreset.allCases) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 180)
+                    }
+                    HStack {
+                        Text("Layout")
+                        Spacer()
+                        Picker("", selection: $settings.layoutMode) {
+                            ForEach(LayoutMode.allCases) { Text($0.title).tag($0) }
+                        }
+                        .labelsHidden().frame(width: 180)
+                    }
+                    Text(settings.layoutMode.subtitle)
+                        .font(.system(size: 11)).foregroundStyle(.secondary)
                 }
 
                 section("Sound") {

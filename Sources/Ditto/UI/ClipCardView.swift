@@ -42,12 +42,12 @@ struct ClipCardView: View {
             footer
         }
         .frame(width: Theme.cardWidth, height: Theme.cardHeight)
-        .background(VisualEffectBackground(material: .contentBackground, blending: .withinWindow))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(Theme.cardBackground())
+        .clipShape(RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(selected ? Theme.accent : Color.primary.opacity(hovering ? 0.18 : 0.08),
-                              lineWidth: selected ? 2.5 : 1)
+            RoundedRectangle(cornerRadius: Theme.cornerRadius, style: .continuous)
+                .strokeBorder(selected ? Theme.accent : (hovering ? Theme.t.borderHover : Theme.t.border),
+                              lineWidth: selected ? Theme.t.selectedBorderWidth : 1)
         )
         .shadow(color: .black.opacity(selected ? 0.25 : 0.12), radius: selected ? 10 : 5, y: 3)
         // No scaleEffect: shrinking unselected cards shifted their header baselines
@@ -88,7 +88,7 @@ struct ClipCardView: View {
             if item.pinned {
                 Image(systemName: "pin.fill")
                     .font(.system(size: 10))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Theme.pin)
             }
             if index < 9 {
                 Text("⌘\(index + 1)")
@@ -183,8 +183,8 @@ struct ClipCardView: View {
             .lineLimit(1)
             .fixedSize()
             .padding(.horizontal, 6).padding(.vertical, 2)
-            .background(Color.primary.opacity(0.08), in: Capsule())
-            .foregroundStyle(.secondary)
+            .background(Theme.t.tagFill, in: Capsule())
+            .foregroundStyle(Theme.t.tagText)
     }
 
     private var footer: some View {
