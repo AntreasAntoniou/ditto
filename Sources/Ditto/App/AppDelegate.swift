@@ -32,6 +32,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Note: we deliberately do NOT prompt for Accessibility on launch — that
         // nags on every start (and after every reinstall, since the code identity
         // changes). We prompt lazily the first time an auto-paste actually needs it.
+        // First run only: a welcome window that explains the hotkey + the grant.
+        Onboarding.showIfNeeded()
     }
 
     /// A Darwin notification that toggles the bar — lets scripts/tests drive it
@@ -138,6 +140,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                          action: #selector(promptAccessibility), keyEquivalent: "")
         }
         menu.addItem(withTitle: "Clear Unpinned History", action: #selector(clearHistory), keyEquivalent: "")
+        menu.addItem(withTitle: "Welcome to Ditto…", action: #selector(showWelcome), keyEquivalent: "")
         menu.addItem(withTitle: "About Ditto", action: #selector(about), keyEquivalent: "")
         menu.addItem(.separator())
         menu.addItem(withTitle: "Quit Ditto", action: #selector(quit), keyEquivalent: "q")
@@ -333,6 +336,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func showWelcome() { Onboarding.present() }
 
     // MARK: Accessibility
 

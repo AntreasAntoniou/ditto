@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Ditto is intentionally NOT sandboxed: a clipboard manager that synthesizes
+      ⌘V into other apps and registers a global hotkey cannot run under the macOS
+      App Sandbox. It ships with the Hardened Runtime (required for notarization);
+      Accessibility is granted by the user at runtime and needs no entitlement.
+      This file is deliberately minimal — add keys here only if a future feature
+      requires them (e.g. com.apple.security.automation.apple-events).
+    -->
+</dict>
+</plist>
