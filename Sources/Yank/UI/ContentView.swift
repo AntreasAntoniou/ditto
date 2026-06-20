@@ -9,7 +9,6 @@ struct ContentView: View {
     /// Drives first-responder focus into the search field on summon (BL-11/H4):
     /// the panel is non-activating, so nothing otherwise makes the field key.
     @FocusState private var searchFocused: Bool
-    @State private var modeHover = false
 
     init(model: PanelViewModel, store: ClipStore) {
         self.model = model
@@ -151,54 +150,25 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
 
-    /// The visible search-mode switcher next to the search field (Exact / Smart /
-    /// Tag), so changing how search works is one click away — not buried in Settings.
+    /// The visible search-mode switcher next to the search field (Smart / Exact /
+    /// Tag). Uses the NATIVE macOS pop-up button (the system control everyone
+    /// recognizes as a dropdown) so it unmistakably reads as clickable — a custom
+    /// Menu label has its background/chevron stripped by .borderlessButton style.
     private var searchModePicker: some View {
-        Menu {
+        HStack(spacing: 5) {
+            Text("Search:").font(.system(size: 11)).foregroundStyle(.secondary)
             Picker("Search mode", selection: $settings.searchMode) {
                 ForEach(SearchMode.allCases) { mode in
-                    Label("\(mode.title) — \(mode.blurb)", systemImage: mode.symbol).tag(mode)
+                    Label(mode.title, systemImage: mode.symbol).tag(mode)
                 }
             }
-            .pickerStyle(.inline)
-        } label: {
-            // Styled like a native macOS pop-up button: a label area + a filled
-            // accent chevron "box" on the trailing edge — the unmistakable
-            // "this is a dropdown you click" affordance.
-            HStack(spacing: 0) {
-                HStack(spacing: 5) {
-                    Image(systemName: settings.searchMode.symbol).font(.system(size: 10))
-                    Text(settings.searchMode.title).font(.system(size: 11.5, weight: .semibold))
-                }
-                .foregroundStyle(Theme.accent)
-                .padding(.leading, 10).padding(.trailing, 8).padding(.vertical, 6)
-
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 22, alignment: .center)
-                    .padding(.vertical, 6)
-                    .background(Theme.accent.opacity(modeHover ? 1.0 : 0.85))
-            }
-            .background(Theme.accent.opacity(modeHover ? 0.22 : 0.14))
-            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1))
-            .shadow(color: Theme.accent.opacity(modeHover ? 0.25 : 0), radius: 4, y: 1)
+            .labelsHidden()
+            .pickerStyle(.menu)
+            .fixedSize()
+            .tint(Theme.accent)
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
-        // Hover: brighten + show the pointing-hand cursor so it's obviously clickable.
-        .onHover { h in
-            modeHover = h
-            if h { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-        }
-        .help("Search mode — click to switch (Smart · Exact · Tag)")
-        .accessibilityElement()
+        .help("Search mode — Smart, Exact, or Tag")
         .accessibilityLabel("Search mode: \(settings.searchMode.title)")
-        .accessibilityHint("Click to switch between Smart, Exact, and Tag")
-        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: Cards
