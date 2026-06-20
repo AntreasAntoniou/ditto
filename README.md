@@ -129,5 +129,5 @@ reimplemented in Swift). To produce/bundle the models, see [`tools/`](tools/READ
 
 ## License
 
-MIT © Axiotic. Bundled on-device models have their own licenses — see
+MIT © Antreas Antoniou. Bundled on-device models have their own licenses — see
 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
