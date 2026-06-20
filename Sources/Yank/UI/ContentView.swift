@@ -162,17 +162,29 @@ struct ContentView: View {
             }
             .pickerStyle(.inline)
         } label: {
-            HStack(spacing: 5) {
-                Image(systemName: settings.searchMode.symbol).font(.system(size: 10))
-                Text(settings.searchMode.title).font(.system(size: 11, weight: .semibold))
-                // The macOS pop-up "double chevron" reads instantly as a clickable selector.
+            // Styled like a native macOS pop-up button: a label area + a filled
+            // accent chevron "box" on the trailing edge — the unmistakable
+            // "this is a dropdown you click" affordance.
+            HStack(spacing: 0) {
+                HStack(spacing: 5) {
+                    Image(systemName: settings.searchMode.symbol).font(.system(size: 10))
+                    Text(settings.searchMode.title).font(.system(size: 11.5, weight: .semibold))
+                }
+                .foregroundStyle(Theme.accent)
+                .padding(.leading, 10).padding(.trailing, 8).padding(.vertical, 6)
+
                 Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 8, weight: .bold)).opacity(0.8)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 22, alignment: .center)
+                    .padding(.vertical, 6)
+                    .background(Theme.accent.opacity(modeHover ? 1.0 : 0.85))
             }
-            .foregroundStyle(Theme.accent)
-            .padding(.horizontal, 10).padding(.vertical, 6)
-            .background(Theme.accent.opacity(modeHover ? 0.20 : 0.12), in: Capsule())
-            .overlay(Capsule().strokeBorder(Theme.accent.opacity(modeHover ? 0.6 : 0.35), lineWidth: 1))
+            .background(Theme.accent.opacity(modeHover ? 0.22 : 0.14))
+            .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(Theme.accent.opacity(0.5), lineWidth: 1))
+            .shadow(color: Theme.accent.opacity(modeHover ? 0.25 : 0), radius: 4, y: 1)
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
