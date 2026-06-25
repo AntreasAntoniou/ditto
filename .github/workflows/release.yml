@@ -43,13 +43,18 @@ jobs:
         uses: actions/cache@v4
         with:
           path: tools/models
-          key: ogma-models-${{ hashFiles('tools/convert_ogma.py', 'tools/_dl.py', 'tools/restore-models.sh', 'tools/_compat.py') }}
+          key: ogma-models-${{ hashFiles('tools/convert_ogma.py', 'tools/_dl.py', 'tools/restore-models.sh', 'tools/_compat.py', 'tools/requirements.txt') }}
+          restore-keys: |
+            ogma-models-
 
       - name: Restore on-device models
+        env:
+          HF_HUB_DISABLE_TELEMETRY: '1'
         run: |
           python3 -m pip install --upgrade pip
-          # Pinned-free install of the conversion stack (see tools/README.md).
-          python3 -m pip install torch transformers coremltools sentencepiece safetensors huggingface_hub
+          # Conversion stack centralized in tools/requirements.txt (also exercised
+          # cert-free by .github/workflows/models.yml).
+          python3 -m pip install -r tools/requirements.txt
           bash tools/restore-models.sh
 
       - name: Verify bundled models are present
