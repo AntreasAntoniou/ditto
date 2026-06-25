@@ -2,21 +2,18 @@
 # CoreML — used by tools/restore-models.sh (which calls tools/_dl.py and
 # tools/convert_ogma.py) and by the CI workflows. Target: Python 3.11.
 #
-# These two pins are the EXACT versions that produced the shipping models
-# (read from the .mlpackage metadata: com.github.apple.coremltools.version=9.0,
-# source=torch==2.7.1, parity_cosine=1.00000). Do not loosen them blindly:
-#  - Unpinned torch resolves to 2.12.x, which coremltools can't lower
-#    (_cast: "only 0-dimensional arrays can be converted to Python scalars").
-#  - coremltools 8.x hits a 'slice'-op regression on the model's rotary
-#    embedding ("Could not convert Var to a NumPy dtype"). 9.0 converts cleanly.
-#  - numpy MUST stay <2: under numpy 2.x coremltools' int cast raises
-#    "only 0-dimensional arrays can be converted to Python scalars" (numpy 2.0
-#    made int(array) on a 1-element array an error). The shipping models were
-#    built on numpy 1.x.
+# FROZEN to the exact stack from the first green `Models` workflow run
+# (.github/workflows/models.yml), which converted both models with
+# parity_cosine=0.99998 vs the PyTorch reference. Do not loosen blindly:
+#  - torch>2.7.x / coremltools<9: convert dies on a _cast/'slice' op.
+#  - numpy>=2: coremltools' int cast raises "only 0-dimensional arrays can be
+#    converted to Python scalars" (numpy 2.0 made int(array) an error).
+# This pair (coremltools 9.0 + torch 2.7.1 + numpy 1.26.4) matches the metadata
+# of the originally-shipped .mlpackage. Re-run models.yml after any bump.
 torch==2.7.1
 coremltools==9.0
-numpy<2
-transformers
-sentencepiece
-safetensors
-huggingface_hub
+numpy==1.26.4
+transformers==5.12.1
+sentencepiece==0.2.1
+safetensors==0.8.0
+huggingface_hub==1.21.0
