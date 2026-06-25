@@ -2,18 +2,15 @@
 # CoreML — used by tools/restore-models.sh (which calls tools/_dl.py and
 # tools/convert_ogma.py) and by the CI workflows. Target: Python 3.11.
 #
-# WHY torch is pinned: coremltools' Torch frontend only converts graphs traced
-# by a torch version it has been tested against. The coremltools 8.x line here
-# declares its ceiling as torch 2.5.0 ("Torch 2.5.0 is the most recent version
-# that has been tested"); newer torch (2.7/2.12) traces ops coremltools can't
-# lower and the convert dies (e.g. _cast "only 0-dimensional arrays..." on 2.12,
-# a 'slice'/int dtype ValueError on 2.7). Pin torch to that tested ceiling.
-#
-# REPRODUCIBILITY: after your first green `Models` workflow run, freeze the rest
-# of these to the resolved versions (copy from that run's `pip freeze`) so
-# releases convert against a fully known-good stack and never drift.
-torch==2.5.0
-coremltools>=8.0,<9.0
+# These two pins are the EXACT versions that produced the shipping models
+# (read from the .mlpackage metadata: com.github.apple.coremltools.version=9.0,
+# source=torch==2.7.1, parity_cosine=1.00000). Do not loosen them blindly:
+#  - Unpinned torch resolves to 2.12.x, which coremltools can't lower
+#    (_cast: "only 0-dimensional arrays can be converted to Python scalars").
+#  - coremltools 8.x hits a 'slice'-op regression on the model's rotary
+#    embedding ("Could not convert Var to a NumPy dtype"). 9.0 converts cleanly.
+torch==2.7.1
+coremltools==9.0
 transformers
 sentencepiece
 safetensors
