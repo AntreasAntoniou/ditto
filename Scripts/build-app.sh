@@ -17,13 +17,25 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN" "$APP/Contents/MacOS/Cliphoard"
 cp "$ROOT/Resources/Info.plist" "$APP/Contents/Info.plist"
 
-# Icon (best effort — skipped if iconutil/sips unavailable).
-if command -v iconutil >/dev/null 2>&1; then
+# Icon (best effort). Built from the committed master PNG (the hoard-bag mascot,
+# Resources/AppIcon.png); falls back to the vector make-icon.swift (⌘V) if absent.
+if command -v iconutil >/dev/null 2>&1 && command -v sips >/dev/null 2>&1; then
     echo "▸ Rendering icon…"
-    swift "$ROOT/Scripts/make-icon.swift" "$ROOT/build" >/dev/null 2>&1 || true
-    if [ -d "$ROOT/build/Cliphoard.iconset" ]; then
-        iconutil -c icns "$ROOT/build/Cliphoard.iconset" -o "$APP/Contents/Resources/Cliphoard.icns" 2>/dev/null || true
-        rm -rf "$ROOT/build/Cliphoard.iconset"
+    ICONSET="$ROOT/build/Cliphoard.iconset"
+    rm -rf "$ICONSET"; mkdir -p "$ICONSET"
+    if [ -f "$ROOT/Resources/AppIcon.png" ]; then
+        for spec in 16:icon_16x16 32:icon_16x16@2x 32:icon_32x32 64:icon_32x32@2x \
+                    128:icon_128x128 256:icon_128x128@2x 256:icon_256x256 512:icon_256x256@2x \
+                    512:icon_512x512 1024:icon_512x512@2x; do
+            sips -z "${spec%%:*}" "${spec%%:*}" "$ROOT/Resources/AppIcon.png" \
+                 --out "$ICONSET/${spec##*:}.png" >/dev/null 2>&1
+        done
+    else
+        swift "$ROOT/Scripts/make-icon.swift" "$ROOT/build" >/dev/null 2>&1 || true
+    fi
+    if [ -d "$ICONSET" ]; then
+        iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/Cliphoard.icns" 2>/dev/null || true
+        rm -rf "$ICONSET"
     fi
 fi
 
