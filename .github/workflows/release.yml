@@ -97,7 +97,7 @@ jobs:
       - name: Compute DMG checksum
         id: dmg
         run: |
-          FILE=$(ls build/Yank-*.dmg)
+          FILE=$(ls build/Cliphoard-*.dmg)
           echo "path=$FILE" >> "$GITHUB_OUTPUT"
           echo "sha256=$(shasum -a 256 "$FILE" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
 
@@ -107,11 +107,11 @@ jobs:
           files: ${{ steps.dmg.outputs.path }}
           generate_release_notes: true
           body: |
-            ### Yank ${{ github.ref_name }}
+            ### Cliphoard ${{ github.ref_name }}
             A fast, private, open-source clipboard manager for macOS.
 
             - macOS 13 Ventura or later · Universal (Apple Silicon & Intel) · notarized
             - **SHA-256:** `${{ steps.dmg.outputs.sha256 }}`
 
-            Install: download the DMG, drag Yank to Applications, and press ⌃⌥⌘V.
-            Or via Homebrew once the cask is published: `brew install --cask yank`.
+            Install: download the DMG, drag Cliphoard to Applications, and press ⌃⌥⌘V.
+            Or via Homebrew once the cask is published: `brew install --cask cliphoard`.

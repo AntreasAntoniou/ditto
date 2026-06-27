@@ -1,7 +1,7 @@
 #!/usr/bin/env swift
 import AppKit
 
-// Draws the final Yank app icon: the Command-V paste keystroke (the action Yank
+// Draws the final Cliphoard app icon: the Command-V paste keystroke (the action Cliphoard
 // performs) as a stacked hero glyph — a bold chevron V over the Command
 // looped-square (U+2318) — in a cyan gradient on a graphite macOS squircle.
 // Ported by hand from design/icons/cmdv/stacked.html (512x512 viewBox); pure
@@ -196,7 +196,7 @@ func png(_ image: NSImage, _ pixels: Int) -> Data {
 }
 
 let outDir = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : "."
-let iconset = "\(outDir)/Yank.iconset"
+let iconset = "\(outDir)/Cliphoard.iconset"
 try? FileManager.default.createDirectory(atPath: iconset, withIntermediateDirectories: true)
 
 let sizes: [(Int, String)] = [

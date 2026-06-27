@@ -1,6 +1,6 @@
-# Releasing Yank
+# Releasing Cliphoard
 
-Yank is distributed directly (Developer ID + notarization), not via the Mac App
+Cliphoard is distributed directly (Developer ID + notarization), not via the Mac App
 Store — a clipboard manager that synthesizes ⌘V and registers a global hotkey
 can't run under the App Sandbox.
 
@@ -26,8 +26,8 @@ can't run under the App Sandbox.
 DEVID="Developer ID Application: Your Name (ABCDE12345)" \
 NOTARY_PROFILE=yank-notary \
 bash Scripts/release.sh
-# → build/Yank-<version>.dmg  (signed, notarized, stapled)
-gh release create v1.0.0 build/Yank-*.dmg --generate-notes
+# → build/Cliphoard-<version>.dmg  (signed, notarized, stapled)
+gh release create v1.0.0 build/Cliphoard-*.dmg --generate-notes
 ```
 
 **Via CI:** push a tag and `.github/workflows/release.yml` does the rest:
